@@ -12,6 +12,8 @@ const users = [
 export const MapboxGlobe = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
+  const userInteracting = useRef(false);
+  const spinEnabled = useRef(true);
 
   useEffect(() => {
     if (!mapContainer.current || map.current) return;
@@ -108,6 +110,53 @@ export const MapboxGlobe = () => {
 
       map.current.on('zoom', updateMarkers);
       updateMarkers();
+
+      // Rotation animation
+      const secondsPerRevolution = 60;
+      const maxSpinZoom = 5;
+      const slowSpinZoom = 3;
+
+      function spinGlobe() {
+        if (!map.current) return;
+        
+        const zoom = map.current.getZoom();
+        if (spinEnabled.current && !userInteracting.current && zoom < maxSpinZoom) {
+          let distancePerSecond = 360 / secondsPerRevolution;
+          if (zoom > slowSpinZoom) {
+            const zoomDif = (maxSpinZoom - zoom) / (maxSpinZoom - slowSpinZoom);
+            distancePerSecond *= zoomDif;
+          }
+          const center = map.current.getCenter();
+          center.lng -= distancePerSecond;
+          map.current.easeTo({ center, duration: 1000, easing: (n) => n });
+        }
+      }
+
+      // Handle user interaction
+      map.current.on('mousedown', () => {
+        userInteracting.current = true;
+      });
+      
+      map.current.on('dragstart', () => {
+        userInteracting.current = true;
+      });
+      
+      map.current.on('mouseup', () => {
+        userInteracting.current = false;
+        setTimeout(() => spinGlobe(), 2000);
+      });
+      
+      map.current.on('touchend', () => {
+        userInteracting.current = false;
+        setTimeout(() => spinGlobe(), 2000);
+      });
+
+      map.current.on('moveend', () => {
+        spinGlobe();
+      });
+
+      // Start spinning
+      spinGlobe();
     });
 
     return () => {
@@ -115,5 +164,7 @@ export const MapboxGlobe = () => {
     };
   }, []);
 
-  return <div ref={mapContainer} className="absolute inset-0 w-full h-full" />;
+  return (
+    <div ref={mapContainer} className="absolute inset-0 w-full h-full [&_.mapboxgl-ctrl-attrib]:hidden" />
+  );
 };
